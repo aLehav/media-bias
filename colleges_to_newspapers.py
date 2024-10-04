@@ -44,7 +44,7 @@ class CollegesToNewspapers():
         """
         Given num_queries, fill in that number of schools' fields for gcs_performed, newspaper_link, newspaper_name, and archive_link.
         """
-        num_schools_to_query = floor(num_queries / config.gcs_api_request["num_archive_results"] / config.gcs_api_request["num_newspaper_results"])
+        num_schools_to_query = floor(num_queries / config.gcs_api_request["num_archive_results"] / config.gcs_api_request["num_newspaper_results"] / 2)
 
         # Subset the DataFrame
         subset_df = self.df[self.df['gcs_performed'] == False].head(num_schools_to_query)
