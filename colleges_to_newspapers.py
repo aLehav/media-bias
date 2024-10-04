@@ -78,3 +78,15 @@ class CollegesToNewspapers():
         self.df.loc[subset_df.index, ['archive_link', 'newspaper_link', 'newspaper', 'gcs_performed']] = subset_df[['archive_link', 'newspaper_link', 'newspaper', 'gcs_performed']]
 
         self.df.to_csv(self.save_path, index=False)
+
+if __name__ == "__main__":
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument("-n", "--num_queries", type=int, help="num of gcs queries to execute to update the table")
+    parser.add_argument("-v", "--verbose", default=0, type=int, help="verbosity (0 or 1)")
+    args = parser.parse_args()
+    num_queries = args['num_queries']
+    verbose = args['verbose']
+
+    colleges_to_newspapers = CollegesToNewspapers()
+    colleges_to_newspapers.run_gcs_queries_and_save(num_queries, verbose)

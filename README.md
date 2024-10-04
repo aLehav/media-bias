@@ -14,3 +14,6 @@ List from [uniRank](https://www.4icu.org/us/a-z/)
   ```
 - Manually delete the last row of the csv
 
+# Newspaper names and links
+
+
