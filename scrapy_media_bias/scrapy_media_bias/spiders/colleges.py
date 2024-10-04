@@ -43,5 +43,5 @@ class CollegeSpider(scrapy.Spider):
 
     def save_to_csv(self, df):
         # Save the DataFrame to a CSV file
-        df.to_csv(config.data_path / "college_rankings.csv", index=False)
+        df.to_csv(config.data_path / "colleges_dfs/00_college.csv", index=False)
         self.log("CSV saved successfully.")
