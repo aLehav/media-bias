@@ -14,7 +14,7 @@ class CollegeSpider(scrapy.Spider):
     headers = {'User-Agent':'crawl'}
     def start_requests(self):
         url = 'https://www.4icu.org/us/a-z/'
-        yield SplashRequest(
+        yield scrapy.Request(
             url,
             callback=self.parse,
             headers={'User-Agent':'crawl'},
@@ -25,23 +25,31 @@ class CollegeSpider(scrapy.Spider):
         rows = response.xpath('//tr')
         
         data = []
+        queue = set()
         for row in rows:
             rank = row.xpath('td[1]/b/text()').get()
             college = row.xpath('td[2]/a/text()').get()
             city = row.xpath('td[3]/text()').get()
             
-            if rank and college:
+            if rank and college and city:
                 data.append({
                     'rank': rank,
                     'college': college,
                     'city': city
                 })
+                queue.add(college)
         
         # Convert to DataFrame
         df = pd.DataFrame(data)
-        self.save_to_csv(df)
+        self.save_df(df)
+        self.save_queue(queue)
 
-    def save_to_csv(self, df):
+    def save_df(self, df):
         # Save the DataFrame to a CSV file
-        df.to_csv(config.data_path / "colleges_dfs/00_college.csv", index=False)
-        self.log("CSV saved successfully.")
+        df.to_csv(config.colleges_dfs_path / "00_colleges.csv", index=False)
+        self.log("DF saved successfully.")
+
+    def save_queue(self, queue):
+        # Create a queue of colleges to be processed for the next step
+        pd.Series(list(queue)).to_csv(config.queues_path / "00_colleges.csv", index=False, header=False, encoding='utf-8')
+        self.log("Queue saved successfully.")

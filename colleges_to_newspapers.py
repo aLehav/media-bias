@@ -1,5 +1,6 @@
 from .gcs_requester import GCSRequester
 from . import config
+from .queue_processing import save_queue, load_queue
 import numpy as np
 import pandas as pd
 from math import floor
@@ -15,42 +16,64 @@ class CollegesToNewspapers():
         Load the gcs requester and list of newspapers, making one if not present.
         """
         self.gcs_requester = GCSRequester()
-        self.save_path = config.colleges_dfs_path / "01_newspapers.csv"
-        if not self.save_path.is_file():
+        self.colleges = pd.read_csv(config.colleges_dfs_path / "00_colleges.csv")
+        self.queue = load_queue(config.queues_path / "00_colleges.csv")
+        self.df_save_path = config.colleges_dfs_path / "01_newspapers.csv"
+        if not self.df_save_path.is_file():
             self.df = self.create_new_cols_and_save()
         else:
-            self.df = pd.read_csv(self.save_path)
+            self.df = pd.read_csv(self.df_save_path)
+
+        self.newspaper_queue_save_path = config.queues_path / "01_newspapers.csv"
+        if self.newspaper_queue_save_path.is_file():
+            self.newspaper_queue = load_queue(self.newspaper_queue_save_path)
+        else:
+            self.newspaper_queue = set()
+            
 
     def create_new_cols_and_save(self) -> pd.DataFrame:
         """
         In the case where there is no existing newspapers df, create and save a blank one. These can then be loaded and gcs querying performed. This is done because the gcs api has a free 100-search-a-day limit.
         """
-        df = pd.read_csv(config.colleges_dfs_path / "00_colleges.csv").assign(gcs_performed = False, newspaper_link="", newspaper="", archive_link="")
-        df.to_csv(self.save_path, index=False)
+        df = pd.read_csv(config.colleges_dfs_path / "00_colleges.csv", nrows=0).assign(gcs_performed = False, newspaper_link="", newspaper="", archive_link="")
+        df.to_csv(self.df_save_path, index=False)
         return df
     
     def print_processing_stats(self, subset_df):
-        total_rows = len(self.df)
-        rows_with_gcs_performed = self.df['gcs_performed'].sum()  # Assumes gcs_performed is 0 or 1
-        rows_without_gcs_performed = total_rows - rows_with_gcs_performed
+        total_rows = len(pd.read_csv(config.colleges_dfs_path / "00_colleges.csv"))
+        rows_without_gcs_performed = len(self.queue)
+        rows_with_gcs_performed = total_rows - rows_without_gcs_performed
+        
         rows_to_process = len(subset_df)
 
-        print(f"Total rows in DataFrame: {total_rows}")
-        print(f"Rows with 'gcs_performed': {rows_with_gcs_performed}")
-        print(f"Rows without 'gcs_performed': {rows_without_gcs_performed}")
-        print(f"Rows to be processed: {rows_to_process}")
+        print(f"Total number of colleges: {total_rows}")
+        print(f"Colleges with 'gcs_performed': {rows_with_gcs_performed}")
+        print(f"Colleges without 'gcs_performed': {rows_without_gcs_performed}")
+        print(f"Colleges to be processed: {rows_to_process}")        
 
     def run_gcs_queries_and_save(self, num_queries, verbose=0):
         """
         Given num_queries, fill in that number of schools' fields for gcs_performed, newspaper_link, newspaper_name, and archive_link.
         """
-        num_schools_to_query = floor(num_queries / config.gcs_api_request["num_archive_results"] / config.gcs_api_request["num_newspaper_results"] / 2)
+        # If queue is empty nothing to do
+        if len(self.queue) == 0: return
+            
+        num_schools_to_query = floor(num_queries / (config.gcs_api_request["num_newspaper_results"] * (1 + config.gcs_api_request["num_archive_results"])))
 
         # Subset the DataFrame
-        subset_df = self.df[self.df['gcs_performed'] == False].head(num_schools_to_query)
+        schools_to_process = []
+        for i in range(num_schools_to_query):
+            if self.queue:
+                schools_to_process.append(self.queue.pop())
 
-        if verbose:
-            self.print_processing_stats(subset_df)
+        # Update newspaper queue
+        self.newspaper_queue.update(schools_to_process)
+
+        # Subset old df and add new cols
+        colleges_df = self.colleges[self.colleges['college'].isin(schools_to_process)]
+        colleges_df = colleges_df.assign(gcs_performed = False, newspaper_link="", newspaper="", archive_link="")
+
+        if verbose: self.print_processing_stats(colleges_df)
 
         # Define a function to perform the operations on each row
         def process_row(row):
@@ -72,12 +95,15 @@ class CollegesToNewspapers():
             return row
         
         # Apply the function to the DataFrame
-        subset_df = subset_df.apply(process_row, axis=1)
+        processed_df = colleges_df.apply(process_row, axis=1)
 
-        # Bulk assign the updated values back to the original DataFrame
-        self.df.loc[subset_df.index, ['archive_link', 'newspaper_link', 'newspaper', 'gcs_performed']] = subset_df[['archive_link', 'newspaper_link', 'newspaper', 'gcs_performed']]
+        # Concatenate to existing df
+        self.df = pd.concat([self.df, processed_df], ignore_index=True)
 
-        self.df.to_csv(self.save_path, index=False)
+        # Save the new version of the df, queue, and newspaper queue
+        self.df.to_csv(self.df_save_path, index=False)
+        save_queue(config.queues_path / "00_colleges.csv", self.queue)
+        save_queue(self.newspaper_queue_save_path, self.newspaper_queue)
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
