@@ -3,10 +3,25 @@
 # See documentation in:
 # https://docs.scrapy.org/en/latest/topics/items.html
 
-import scrapy
+from scrapy.item import Item, Field
+
+class ArchiveScreenshotItem(Item):
+    college = Field()
+    archive_link = Field()
+    archive_screenshot = Field()
+
+class NewspaperScreenshotItem(Item):
+    college = Field()
+    newspaper = Field()
+    newspaper_link = Field()
+    newspaper_screenshot = Field()
+
+class ScreenshotItem(Item):
+    college = Field()
+    newspaper = Field()
+    newspaper_link = Field()
+    archive_link = Field()
+    newspaper_screenshot = Field()
+    archive_screenshot = Field()
 
 
-class ScrapyMediaBiasItem(scrapy.Item):
-    # define the fields for your item here like:
-    # name = scrapy.Field()
-    pass

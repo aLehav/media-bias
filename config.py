@@ -4,6 +4,7 @@ project_path = Path(r"C:\Users\adaml\OneDrive\Antisemitism")
 data_path = project_path / "data"
 colleges_dfs_path = data_path / "colleges_dfs"
 queues_path = data_path / "queues"
+screenshots_path = data_path / "screenshots"
 
 gcs_api_request = {
     "params": {
