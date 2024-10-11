@@ -3,7 +3,7 @@ from slugify import slugify
 import base64
 import pandas as pd
 from scrapy_splash import SplashRequest 
-from scrapy_media_bias.items import ArchiveScreenshotItem, NewspaperScreenshotItem
+from link_verification.items import ArchiveScreenshotItem, NewspaperScreenshotItem
 import sys
 import os
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..'))
@@ -19,11 +19,7 @@ class NewspaperScreenshotSpider(scrapy.Spider):
         super().__init__(*args, **kwargs)
         self.queue = load_queue(config.queues_path / "01_newspapers.csv")
         self.newspapers = pd.read_csv(config.colleges_dfs_path / "01_newspapers.csv")
-        self.newspapers = self.newspapers[self.newspapers['college'].isin(self.queue)]
-        self.newspapers_df = pd.read_csv(config.colleges_dfs_path / 
-        "02_verified_newspapers.csv")
-        self.start_urls = self.newspapers['links']
-
+        self.newspapers = self.newspapers[self.newspapers['college'].isin(self.queue)].head(5)
     
     def start_requests(self):
         for _, row in self.newspapers.iterrows():
