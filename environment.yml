@@ -1,0 +1,16 @@
+name: adl
+channels:
+  - conda-forge
+  - anaconda
+dependencies:
+  - python=3.11
+  - scrapy
+  - psycopg2
+  - numpy
+  - pandas
+  - matplotlib
+  - ipykernel
+  - tqdm
+  - requests
+  - beautifulsoup4
+  - pip
