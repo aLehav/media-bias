@@ -3,7 +3,7 @@ import pandas as pd
 from scrapy_splash import SplashRequest 
 import sys
 import os
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..'))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../..'))
 sys.path.append(project_root)
 
 from media_bias import config

@@ -7,6 +7,7 @@ from scrapy.item import Item, Field
 
 class ArchiveScreenshotItem(Item):
     college = Field()
+    newspaper = Field()
     archive_link = Field()
     archive_screenshot = Field()
 

@@ -7,33 +7,26 @@
 # useful for handling different item types with a single interface
 from itemadapter import ItemAdapter
 from link_verification.items import ArchiveScreenshotItem, ScreenshotItem, NewspaperScreenshotItem
-
+from scrapy.exceptions import DropItem
+from collections import defaultdict
 
 class AggregatePipeline:
     def __init__(self) -> None:
-        self.partial_items = {}
+        self.screenshot_items = {}
 
     def process_item(self, item, spider):
         college = item['college']
 
-        if college in self.partial_items:
-            if 'newspaper_link' in item:
-                newspaper_item = item
-                archive_item = self.partial_items.pop(college)
-            else:
-                archive_item = item
-                newspaper_item = self.partial_items.pop(college)
-            
-            yield ScreenshotItem(
-                college = newspaper_item['college'],
-                newspaper = newspaper_item['newspaper'],
-                newspaper_link = newspaper_item['newspaper_link'],
-                newspaper_screenshot = newspaper_item['newspaper_screenshot'],
-                archive_link = archive_item['archive_link'],
-                archive_screenshot = archive_item['archive_screenshot']
-            )
+        if college in self.screenshot_items:
+            self.screenshot_items[college].update(**item)
+            return self.screenshot_items.pop(college)
         else:
-            self.partial_items[college] = item
+            self.screenshot_items[college] = ScreenshotItem(**item)
+            raise DropItem(f"Waiting for other screenshot for {college}")
+        
+    def close_spider(self, spider):
+        if self.partial_items:
+            raise RuntimeError("Some partial items uncleared.")
 
 class ScreenshotPipeline:
     def __init__(self) -> None:
