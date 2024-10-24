@@ -10,6 +10,8 @@ class DBConn:
             origin_link VARCHAR(255),
             date_scraped DATE,
             amcha_name VARCHAR(255),
+            amcha_origin_link VARCHAR(255),
+            amcha_date_scraped DATE,
             UNIQUE (name)
         """,
         'newspapers':"""
@@ -89,9 +91,12 @@ class DBConn:
         self.drop_table('newspapers')
         self.drop_table('schools')
 
+    def commit(self):
+        self.connection.commit()
+
     def close(self, commit=False):
         if commit:
-            self.connection.commit()
+            self.commit()
         if self.cur:
             self.cur.close()
         if self.connection:

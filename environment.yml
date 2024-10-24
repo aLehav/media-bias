@@ -13,4 +13,6 @@ dependencies:
   - tqdm
   - requests
   - beautifulsoup4
+  - ipywidgets
   - pip
+  
