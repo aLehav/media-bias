@@ -47,6 +47,8 @@ class WikiPipeline:
         return item
         
 class AmchaUniPipeline:
+    manual_verification_stop = False
+
     def open_spider(self, spider) -> None:
         self.dbconn = DBConn()
         self.conn = self.dbconn.connection
@@ -55,7 +57,8 @@ class AmchaUniPipeline:
             SELECT name, amcha_name FROM schools
         """)
         self.school_rows = self.cur.fetchall()
-        self.paired_schools = [school_row[0] for school_row in self.school_rows if school_row[1]]
+        self.known_amcha_names = set((school_row[1] for school_row in self.school_rows))
+        self.known_amcha_names.remove(None)
         self.unpaired_schools = [school_row[0] for school_row in self.school_rows if school_row[1] is None]
 
     def close_spider(self, spider):
@@ -66,44 +69,54 @@ class AmchaUniPipeline:
         amcha_name = item['name']
         origin_link = item['link']
 
-        if amcha_name in self.paired_schools:
+        if amcha_name in self.known_amcha_names:
             print(f"Match for {amcha_name} already found.")
             return None
+        
+        school_name = None
         if amcha_name in self.unpaired_schools:
             print(f"Exact match found for {amcha_name} found.")
+            school_name = amcha_name
+        else:
+            if self.manual_verification_stop:
+                print(f"No exact match found for {amcha_name}. Left unmatched at verifier's request.")
+            else:
+                print(f"Attempting to find a rough match found for {amcha_name}:")
+                words_in_amcha_name = amcha_name.replace(",","").split(" ")
+                stripped_words = [word.strip() for word in words_in_amcha_name]
+                common_words = ["University","College","of","the","Community", "State"]
+                words_in_amcha_name = [word for word in stripped_words if word not in common_words]
+                if len(words_in_amcha_name) == 0: return
+                unpaired_matches = [school for school in self.unpaired_schools if any(word in school for word in words_in_amcha_name)]
+
+            
+                if len(unpaired_matches) == 0:
+                    print(f"No rough matches found for {amcha_name}.")
+                else:
+                    matches_list = "\n".join([f"{i}. {match}" for i, match in enumerate(unpaired_matches, 1)])
+
+                    print(f"\tRough matches for {amcha_name}:\n{matches_list}", flush=True)
+
+                    user_input = input(f"Input index of best {amcha_name} match. If you're tired of matching, input -1. If you can't find a match, input 0 to skip.")
+                    idx = int(user_input)
+                    if idx < 0:
+                        print("Manual verification turned off.")
+                        self.manual_verification_stop = True
+                    elif (idx > 0) and (idx < len(unpaired_matches)):
+                        school_name = unpaired_matches[idx-1]
+                        print(f"Closest match: {unpaired_matches[idx-1]}")
+        
+        if school_name:
             try:
                 self.cur.execute("""
                     UPDATE schools
                     SET amcha_name = %s, amcha_origin_link = %s, amcha_date_scraped = %s
                     WHERE name = %s
-                """, (amcha_name, origin_link, today, amcha_name))
-                
-                self.unpaired_schools.remove(amcha_name)
+                """, (amcha_name, origin_link, today, school_name))
+                self.dbconn.commit()
+                self.unpaired_schools.remove(school_name)
             except Exception as e:
                 # Rollback the transaction for any other exception
                 self.conn.rollback()
                 spider.logger.error(f"An error occurred: {e}")
-        else:
-            print(f"No exact match found for {amcha_name}.")
-            words_in_amcha_name = amcha_name.replace(",","").split(" ")
-            stripped_words = [word.strip() for word in words_in_amcha_name]
-            common_words = ["University","College","of","the","Community"]
-            words_in_amcha_name = [word for word in stripped_words if word not in common_words]
-            unpaired_matches = [school for school in self.unpaired_schools if any(word in school for word in words_in_amcha_name)]
-
-            
-            if len(unpaired_matches) == 0:
-                print(f"No rough matches found for {amcha_name}")
-            else:
-                matches_list = "\n".join([f"{i}. {match}" for i, match in enumerate(unpaired_matches, 1)])
-
-                print(f"\tRough matches for {amcha_name}:\n{matches_list}", flush=True)
-
-                user_input = input(f"Input index of best {amcha_name} match. If you're sure no matches exist, input -1. If you want to skip this example, input 0.")
-                idx = int(user_input)
-                if idx < 0:
-                    print("Index less than 0")
-                elif idx > 0:
-                    print(f"Closest match: {unpaired_matches[idx-1]}")
-        
         # print(item['name'])
