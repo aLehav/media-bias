@@ -12,6 +12,7 @@ class DBConn:
             amcha_name VARCHAR(255),
             amcha_origin_link VARCHAR(255),
             amcha_date_scraped DATE,
+            amcha_name_skipped BOOLEAN DEFAULT FALSE,
             UNIQUE (name)
         """,
         'newspapers':"""

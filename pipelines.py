@@ -70,51 +70,67 @@ class AmchaUniPipeline:
         origin_link = item['link']
 
         if amcha_name in self.known_amcha_names:
-            print(f"Match for {amcha_name} already found.")
+            spider.logger.info(f"Match for {amcha_name} already found.")
             return None
         
         school_name = None
         if amcha_name in self.unpaired_schools:
-            print(f"Exact match found for {amcha_name} found.")
+            spider.logger.info(f"Exact match found for {amcha_name} found.")
             school_name = amcha_name
         else:
             if self.manual_verification_stop:
-                print(f"No exact match found for {amcha_name}. Left unmatched at verifier's request.")
+                spider.logger.info(f"No exact match found for {amcha_name}. Left unmatched at verifier's request.")
             else:
-                print(f"Attempting to find a rough match found for {amcha_name}:")
+                spider.logger.info(f"Attempting to find a rough match found for {amcha_name}:")
                 words_in_amcha_name = amcha_name.replace(",","").split(" ")
+                common_words = ["University","College","of","the","Community", "State", "", " "]
                 stripped_words = [word.strip() for word in words_in_amcha_name]
-                common_words = ["University","College","of","the","Community", "State"]
                 words_in_amcha_name = [word for word in stripped_words if word not in common_words]
-                if len(words_in_amcha_name) == 0: return
-                unpaired_matches = [school for school in self.unpaired_schools if any(word in school for word in words_in_amcha_name)]
+                spider.logger.info(f"Words in amcha name: {words_in_amcha_name}")
+                if len(words_in_amcha_name) == 0: 
+                    unpaired_matches = []
+                else:
+                    unpaired_matches = [school for school in self.unpaired_schools if any(word in school.split(" ") for word in words_in_amcha_name)]
 
             
                 if len(unpaired_matches) == 0:
-                    print(f"No rough matches found for {amcha_name}.")
+                    spider.logger.info(f"No rough matches found for {amcha_name}. Keeping unmatched.")
+                    school_name = "UNMATCHED"
                 else:
                     matches_list = "\n".join([f"{i}. {match}" for i, match in enumerate(unpaired_matches, 1)])
 
-                    print(f"\tRough matches for {amcha_name}:\n{matches_list}", flush=True)
+                    spider.logger.info(f"\tRough matches for {amcha_name}:\n{matches_list}")
 
                     user_input = input(f"Input index of best {amcha_name} match. If you're tired of matching, input -1. If you can't find a match, input 0 to skip.")
                     idx = int(user_input)
                     if idx < 0:
-                        print("Manual verification turned off.")
+                        spider.logger.info("Manual verification turned off.")
                         self.manual_verification_stop = True
-                    elif (idx > 0) and (idx < len(unpaired_matches)):
+                    elif idx == 0:
+                        school_name = "UNMATCHED"
+                    elif (idx > 0) and (idx <= len(unpaired_matches)):
                         school_name = unpaired_matches[idx-1]
-                        print(f"Closest match: {unpaired_matches[idx-1]}")
+                        spider.logger.info(f"Closest match: {unpaired_matches[idx-1]}")
+                    else:
+                        spider.logger.info("INVALID IDX")
         
         if school_name:
             try:
-                self.cur.execute("""
-                    UPDATE schools
-                    SET amcha_name = %s, amcha_origin_link = %s, amcha_date_scraped = %s
-                    WHERE name = %s
-                """, (amcha_name, origin_link, today, school_name))
-                self.dbconn.commit()
-                self.unpaired_schools.remove(school_name)
+                if school_name == "UNMATCHED":
+                    self.cur.execute("""
+                        INSERT INTO schools (amcha_name, amcha_origin_link, amcha_date_scraped, amcha_name_skipped)
+                        VALUES  (%s, %s, %s, %s)
+                    """, (amcha_name, origin_link, today, True))
+                    self.dbconn.commit()
+                else:
+                    self.cur.execute("""
+                        UPDATE schools
+                        SET amcha_name = %s, amcha_origin_link = %s, amcha_date_scraped = %s
+                        WHERE name = %s
+                    """, (amcha_name, origin_link, today, school_name))
+                    self.dbconn.commit()
+                    spider.logger.info("Updated schools for scraped name.")
+                    self.unpaired_schools.remove(school_name)
             except Exception as e:
                 # Rollback the transaction for any other exception
                 self.conn.rollback()
