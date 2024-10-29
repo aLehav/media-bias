@@ -1,8 +1,11 @@
 from .postgres import DBConn
-from .items import WikiItem
+from .items import WikiItem, IncidentItem
+from .py_config import data_path
 from datetime import date
 from psycopg2 import errors
 from psycopg2.errorcodes import UNIQUE_VIOLATION
+from collections import defaultdict
+import json
 
 class WikiPipeline:
     def open_spider(self, spider) -> None:
@@ -91,7 +94,6 @@ class AmchaUniPipeline:
                     unpaired_matches = []
                 else:
                     unpaired_matches = [school for school in self.unpaired_schools if any(word in school.split(" ") for word in words_in_amcha_name)]
-
             
                 if len(unpaired_matches) == 0:
                     spider.logger.info(f"No rough matches found for {amcha_name}. Keeping unmatched.")
@@ -112,7 +114,7 @@ class AmchaUniPipeline:
                         school_name = unpaired_matches[idx-1]
                         spider.logger.info(f"Closest match: {unpaired_matches[idx-1]}")
                     else:
-                        spider.logger.info("INVALID IDX")
+                        spider.logger.info("Invalid index.")
         
         if school_name:
             try:
@@ -135,4 +137,87 @@ class AmchaUniPipeline:
                 # Rollback the transaction for any other exception
                 self.conn.rollback()
                 spider.logger.error(f"An error occurred: {e}")
-        # print(item['name'])
+
+class AmchaIncidentPipeline:
+    total_count = 0
+    unassigned_field_examples = defaultdict(list)
+    
+    def unassigned_fields_processor(self, fields):
+        field_mapping = {
+            # "options": ["TARGETING JEWISH STUDENTS AND STAFF", "ANTISEMITIC EXPRESSION"]
+            # Single text val
+            '5': {
+                'Category': lambda f: f,
+            },
+            # "options": ["PHYSICAL ASSAULT","DISCRIMINATION","DESTRUCTION OF JEWISH PROPERTY","GENOCIDAL EXPRESSION","SUPPRESSION OF SPEECH/MOVEMENT/ASSEMBLY","BULLYING","DENIGRATION","HISTORICAL","CONDONING TERRORISM","DENYING JEWS SELF-DETERMINATION","DEMONIZATION","BDS ACTIVITY"]
+            # List of text vals
+            '6_raw': {
+                'Classification': lambda f: f,
+            },
+            '7': {
+                'Date': lambda f: f,
+            },
+            '8_raw': {
+                'Description': lambda f: f,
+            },
+            '36_raw': {
+                'University_id': lambda f: f[0]['id'] if f else None,
+                'University': lambda f: f[0]['identifier'] if f else None,
+            },
+            '50_raw': {
+                'Photos': lambda f: f['url'] if type(f)!=str else None,
+            },
+            # "options": [ "PASSED", "FAILED" , ""], text
+            '77_raw': {
+                'BDS_Vote': lambda f: f,
+            },
+            '177_raw': {
+                'University_Response': lambda f: f,
+            }
+        }
+        
+        abc = {}
+        
+        for field_key, output in field_mapping.items():
+            if f"field_{field_key}" in fields:
+                for output_key, value_func in output.items():
+                    abc[output_key] = value_func(fields[f"field_{field_key}"])
+
+
+        handled_suffixes = ['5_raw',
+                            '6',
+                            '7_raw',
+                            '8',
+                            '36',
+                            '50','50:thumb_2','50:thumb_3',
+                            '77',
+                            '151','151_raw','160.field_151','160.field_151_raw'
+                            '177']
+        
+        # Temporary
+        for field in fields:
+            if field[:6] == "field_": 
+                if (field[6:] not in field_mapping.keys()) and (field[6:] not in handled_suffixes):
+                    self.unassigned_field_examples[field].append(fields[field])
+
+        return abc
+    
+    def open_spider(self, spider) -> None:
+        self.dbconn = DBConn()
+        self.conn = self.dbconn.connection
+        self.cur = self.dbconn.cur
+
+    def close_spider(self, spider) -> None:
+        self.dbconn.close(commit=True)
+        spider.logger.info(f"\n\nTotal number of examples: {self.total_count}")
+        with open(data_path / "unassigned_examples.json", "w") as f:
+            json.dump(self.unassigned_field_examples, f, indent=2)
+        spider.logger.info(f"\n\nUnique fields not handled and their examples:\n\t{self.unassigned_field_examples}")
+
+    def process_item(self, item: IncidentItem, spider):
+        today = date.today()
+        abc = self.unassigned_fields_processor(item['unassigned_fields'])
+        spider.logger.info(f"ABC: {abc}")
+        id = item['amcha_web_id']
+        self.total_count += 1
+

@@ -51,7 +51,9 @@ class DBConn:
             category TEXT,
             classification TEXT,
             date DATE,
-            description TEXT
+            description TEXT,
+            amcha_web_id VARCHAR(127),
+            UNIQUE (amcha_web_id)
         """
     }
     def __init__(self) -> None:
