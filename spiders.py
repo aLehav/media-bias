@@ -1,7 +1,9 @@
+from .postgres import DBConn
+from .items import WikiItem, AmchaUniItem, IncidentItem
+
 from typing import Iterable
 import scrapy
 from scrapy.http import Response
-from .items import WikiItem, AmchaUniItem, IncidentItem
 import re
 import json
 from urllib.parse import urlencode
@@ -136,6 +138,15 @@ class AmchaIncidentSpider(scrapy.Spider):
         "x-requested-with": "XMLHttpRequest",
     }
 
+    def __init__(self, **kwargs):
+        self.dbconn = DBConn()
+        self.conn = self.dbconn.connection
+        self.cur = self.dbconn.cur
+        self.cur.execute("""
+            SELECT amcha_web_id FROM incidents
+        """)
+        self.known_incidents = set((incident_row[0] for incident_row in self.cur.fetchall()))
+
     def response_to_dict(self, response) -> dict:
         json_data = re.search(r"jQuery\d+_\d+\s\=+\s'function'\s&&\sjQuery\d+_\d+(.*);", response.text).group(1)
         data = json.loads(json_data[1:-1])
@@ -154,14 +165,13 @@ class AmchaIncidentSpider(scrapy.Spider):
 
     def parse_page(self, response):
         response_dict = self.response_to_dict(response)
-        ids = [item['id'] for item in response_dict['records']]
+        ids = set((item['id'] for item in response_dict['records']))
+        ids -= self.known_incidents
         for idx, id in enumerate(ids):
             full_url = f"{self.get_incident_url(id)}?{self.incident_query_string}"
             yield scrapy.Request(url=full_url, headers=self.incident_headers, callback=self.parse_incident, meta={'origin_link': full_url, 'amcha_web_id': id})
-            if idx > 100:
-                break
 
     def parse_incident(self, response):
         response_dict = self.response_to_dict(response)
-        item = IncidentItem(amcha_web_id=response.meta['amcha_web_id'], unassigned_fields=response_dict)
+        item = IncidentItem(amcha_web_id=response.meta['amcha_web_id'], raw_fields=response_dict, origin_link=response.meta['origin_link'])
         yield item

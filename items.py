@@ -11,6 +11,5 @@ class AmchaUniItem(Item):
 
 class IncidentItem(Item):
     amcha_web_id = Field()
-    school = Field()
-    date = Field()
-    unassigned_fields = Field()
+    origin_link = Field()
+    raw_fields = Field()

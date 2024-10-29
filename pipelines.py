@@ -1,16 +1,15 @@
 from .postgres import DBConn
 from .items import WikiItem, IncidentItem
 from .py_config import data_path
+
 from datetime import date
 from psycopg2 import errors
 from psycopg2.errorcodes import UNIQUE_VIOLATION
 from collections import defaultdict
-import json
 
 class WikiPipeline:
     def open_spider(self, spider) -> None:
         self.dbconn = DBConn()
-        self.conn = self.dbconn.connection
         self.cur = self.dbconn.cur
 
     def close_spider(self, spider):
@@ -39,12 +38,12 @@ class WikiPipeline:
             self.dbconn.commit()
 
         except errors.lookup(UNIQUE_VIOLATION) as e:
-            self.conn.rollback()  # Rollback the transaction in case of a unique constraint violation
+            self.dbconn.rollback()  # Rollback the transaction in case of a unique constraint violation
             spider.logger.info(f"Duplicate entry for school name: {item['school_name']} or newspaper name: {item['newspaper_name']} - {e}")
 
         except Exception as e:
             # Rollback the transaction for any other exception
-            self.conn.rollback()
+            self.dbconn.rollback()
             spider.logger.error(f"An error occurred: {e}")
         
         return item
@@ -54,7 +53,6 @@ class AmchaUniPipeline:
 
     def open_spider(self, spider) -> None:
         self.dbconn = DBConn()
-        self.conn = self.dbconn.connection
         self.cur = self.dbconn.cur
         self.cur.execute("""
             SELECT name, amcha_name FROM schools
@@ -135,89 +133,128 @@ class AmchaUniPipeline:
                     self.unpaired_schools.remove(school_name)
             except Exception as e:
                 # Rollback the transaction for any other exception
-                self.conn.rollback()
+                self.dbconn.rollback()
                 spider.logger.error(f"An error occurred: {e}")
 
 class AmchaIncidentPipeline:
     total_count = 0
     unassigned_field_examples = defaultdict(list)
+
+    def to_db_col_name(self, option: str):
+        processed_option = option.lower().replace(" ","_").replace("/","_").replace("-","_")
+        return processed_option
     
-    def unassigned_fields_processor(self, fields):
-        field_mapping = {
-            # "options": ["TARGETING JEWISH STUDENTS AND STAFF", "ANTISEMITIC EXPRESSION"]
-            # Single text val
-            '5': {
-                'Category': lambda f: f,
-            },
-            # "options": ["PHYSICAL ASSAULT","DISCRIMINATION","DESTRUCTION OF JEWISH PROPERTY","GENOCIDAL EXPRESSION","SUPPRESSION OF SPEECH/MOVEMENT/ASSEMBLY","BULLYING","DENIGRATION","HISTORICAL","CONDONING TERRORISM","DENYING JEWS SELF-DETERMINATION","DEMONIZATION","BDS ACTIVITY"]
-            # List of text vals
-            '6_raw': {
-                'Classification': lambda f: f,
-            },
-            '7': {
-                'Date': lambda f: f,
-            },
-            '8_raw': {
-                'Description': lambda f: f,
-            },
-            '36_raw': {
-                'University_id': lambda f: f[0]['id'] if f else None,
-                'University': lambda f: f[0]['identifier'] if f else None,
-            },
-            '50_raw': {
-                'Photos': lambda f: f['url'] if type(f)!=str else None,
-            },
-            # "options": [ "PASSED", "FAILED" , ""], text
-            '77_raw': {
-                'BDS_Vote': lambda f: f,
-            },
-            '177_raw': {
-                'University_Response': lambda f: f,
+    def raw_fields_processor(self, fields):
+        def category_mapping(f: str):
+            if self.to_db_col_name(f) == 'targeting_jewish_students_and_staff':
+                return {
+                    'targeting_jewish_students_and_staff': True,
+                    'antisemitic_expression': False,
+                    'category_raw': f
+                }
+            elif self.to_db_col_name(f) == 'antisemitic_expression':
+                return {
+                    'targeting_jewish_students_and_staff': False,
+                    'antisemitic_expression': True,
+                    'category_raw': f
+                }
+            else:
+                raise(ValueError(f"Category mapping with category {self.to_db_col_name(f)}"))
+            
+        def classification_mapping(f: list):
+            classification_dict = {
+                'physical_assault': False, 
+                'discrimination': False, 
+                'destruction_of_jewish_property': False, 
+                'genocidal_expression': False, 
+                'suppression_of_speech_movement_assembly': False, 
+                'bullying': False, 
+                'denigration': False, 
+                'historical': False, 
+                'condoning_terrorism': False, 
+                'denying_jews_self_determination': False, 
+                'demonization': False, 
+                'bds_activity': False,
+                'classification_raw': str(f)
             }
+            for classification in f:
+                classification_dict[self.to_db_col_name(classification)] = True
+            return classification_dict
+        
+        def bds_vote_passed_mapping(f: str):
+            if f == "PASSED":
+                return {'bds_vote_passed': True}
+            elif f == "FAILED":
+                return {'bds_vote_passed': False}
+            elif f == "":
+                return {'bds_vote_passed': None}
+            else:
+                raise(ValueError(f"Unexpected bds_vote_passed val: {f}"))
+
+        field_mapping = {
+            '5': category_mapping,
+            '6_raw': classification_mapping,
+            '7': lambda f: {'date_occurred': f},
+            '8_raw': lambda f: {'description': f},
+            '36_raw': lambda f: {
+                'school_web_id': f[0]['id'] if f else None,
+                'school_name': f[0]['identifier'] if f else None,
+            },
+            '50_raw': lambda f: {
+                'photos_link': f['url'] if type(f)!=str else None,
+            },
+            '77_raw': bds_vote_passed_mapping,
+            '177_raw': lambda f: {'school_response': f if len(f) else None},
         }
         
-        abc = {}
+        mapped_fields = {}
         
-        for field_key, output in field_mapping.items():
+        for field_key, output_func in field_mapping.items():
             if f"field_{field_key}" in fields:
-                for output_key, value_func in output.items():
-                    abc[output_key] = value_func(fields[f"field_{field_key}"])
+                mapped_fields.update(output_func(fields[f"field_{field_key}"]))
 
-
-        handled_suffixes = ['5_raw',
-                            '6',
-                            '7_raw',
-                            '8',
-                            '36',
-                            '50','50:thumb_2','50:thumb_3',
-                            '77',
-                            '151','151_raw','160.field_151','160.field_151_raw'
-                            '177']
-        
-        # Temporary
-        for field in fields:
-            if field[:6] == "field_": 
-                if (field[6:] not in field_mapping.keys()) and (field[6:] not in handled_suffixes):
-                    self.unassigned_field_examples[field].append(fields[field])
-
-        return abc
+        return mapped_fields
     
     def open_spider(self, spider) -> None:
         self.dbconn = DBConn()
-        self.conn = self.dbconn.connection
         self.cur = self.dbconn.cur
 
     def close_spider(self, spider) -> None:
         self.dbconn.close(commit=True)
         spider.logger.info(f"\n\nTotal number of examples: {self.total_count}")
-        with open(data_path / "unassigned_examples.json", "w") as f:
-            json.dump(self.unassigned_field_examples, f, indent=2)
-        spider.logger.info(f"\n\nUnique fields not handled and their examples:\n\t{self.unassigned_field_examples}")
 
     def process_item(self, item: IncidentItem, spider):
         today = date.today()
-        abc = self.unassigned_fields_processor(item['unassigned_fields'])
-        spider.logger.info(f"ABC: {abc}")
-        id = item['amcha_web_id']
+        mapped_dict = self.raw_fields_processor(item['raw_fields'])
+        if 'school_web_id' not in mapped_dict: raise(RuntimeError(f"Entry with no school_web_id: {mapped_dict}"))
+
+        mapped_dict.update({
+            'date_scraped': today,
+            'origin_link': item['origin_link'],
+            'amcha_web_id': item['amcha_web_id'],
+        })
+        try:
+            self.cur.execute("""
+                UPDATE schools
+                SET amcha_web_id = %s
+                WHERE amcha_name = %s
+                RETURNING id;
+            """, (mapped_dict['school_web_id'],mapped_dict['school_name']))
+            school_id = self.cur.fetchone()[0]
+            mapped_dict['school_id'] = school_id
+
+            cols = ', '.join(mapped_dict.keys())
+            placeholders = ', '.join(['%s'] * len(mapped_dict))
+            sql = f"INSERT INTO incidents ({cols}) VALUES ({placeholders})"
+            self.cur.execute(sql, tuple(mapped_dict.values()))
+            
+            self.dbconn.commit()
+
+            spider.logger.info(f"Incident for {mapped_dict['school_name']} on {mapped_dict['date_occurred']} inserted.")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            self.dbconn.rollback()
+            return
+        
         self.total_count += 1
 
