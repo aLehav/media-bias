@@ -13,6 +13,7 @@ class DBConn:
             amcha_origin_link VARCHAR(255),
             amcha_date_scraped DATE,
             amcha_name_skipped BOOLEAN DEFAULT FALSE,
+            amcha_web_id VARCHAR(127),
             UNIQUE (name)
         """,
         'newspapers':"""
@@ -48,11 +49,30 @@ class DBConn:
             school_id INTEGER REFERENCES schools(id) ON DELETE RESTRICT,
             origin_link VARCHAR(255),
             date_scraped DATE,
-            category TEXT,
-            classification TEXT,
-            date DATE,
+            date_occurred DATE,
             description TEXT,
             amcha_web_id VARCHAR(127),
+            category_raw VARCHAR(127),
+            classification_raw VARCHAR(255),
+            school_web_id VARCHAR(127)
+            school_name VARCHAR(255)
+            photos_link VARCHAR(255)
+            bds_vote_passed BOOLEAN
+            school_response TEXT
+            targeting_jewish_students_and_staff BOOLEAN
+            antisemitic_expression BOOLEAN
+            physical_assault BOOLEAN
+            discrimination BOOLEAN
+            destruction_of_jewish_property BOOLEAN
+            genocidal_expression BOOLEAN
+            suppression_of_speech_movement_assembly BOOLEAN
+            bullying BOOLEAN
+            denigration BOOLEAN
+            historical BOOLEAN
+            condoning_terrorism BOOLEAN
+            denying_jews_self_determination BOOLEAN
+            demonization BOOLEAN
+            bds_activity BOOLEAN
             UNIQUE (amcha_web_id)
         """
     }
