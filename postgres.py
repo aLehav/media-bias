@@ -1,7 +1,10 @@
-from .py_config import POSTGRES_DATA
+"""Module providing an interface to the postgres database."""
+
 import psycopg2
+from .py_config import POSTGRES_DATA
 
 class DBConn:
+    """Class for connection to the postgres database"""
     table_fields = {
         'schools':"""
             id SERIAL PRIMARY KEY,
@@ -81,6 +84,7 @@ class DBConn:
         self.cur = self.connection.cursor()
 
     def print_all_table_names(self):
+        """Print the name of all tables"""
         self.cur.execute("""
             SELECT table_name
             FROM information_schema.tables
@@ -91,6 +95,7 @@ class DBConn:
             print(table[0])
 
     def create_table(self, key):
+        """Create a new table if it does not exist"""
         self.cur.execute(f"""
         CREATE TABLE IF NOT EXISTS {key} (
             {DBConn.table_fields[key]}
@@ -98,32 +103,39 @@ class DBConn:
         """)
 
     def create_all_tables(self):
+        """Create all tables in a proper order"""
         self.create_table('schools')
         self.create_table('newspapers')
         self.create_table('articles')
         self.create_table('incidents')
 
     def drop_table(self, key):
+        """Drop a given table"""
         self.cur.execute(f"""
         DROP TABLE IF EXISTS {key} CASCADE
         """)
 
     def purge(self):
+        """Drop all tables in proper order"""
         self.drop_table('incidents')
         self.drop_table('articles')
         self.drop_table('newspapers')
         self.drop_table('schools')
 
     def commit(self):
+        """Commit changes"""
         self.connection.commit()
 
     def rollback(self):
+        """Rollback changes"""
         self.connection.rollback()
 
     def close(self, commit=False):
+        """Close the connection, committing if needed"""
         if commit:
             self.commit()
         if self.cur:
             self.cur.close()
         if self.connection:
             self.connection.close()
+            
