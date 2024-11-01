@@ -29,6 +29,8 @@ class DBConn:
             archive_link VARCHAR(255),
             scraping_method INTEGER,
             time_last_scraped TIMESTAMP,
+            date_link_scraped DATE,
+            link_is_accurate BOOLEAN,
             UNIQUE (school_id, name)
         """,
         'articles':"""
