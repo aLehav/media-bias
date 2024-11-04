@@ -9,7 +9,7 @@ def generate_checkbox(value, description):
         disabled=False, indent=False
     )
 
-checkboxes = {
+local_widgets = {
     'purge_db': generate_checkbox(
         value=False,
         description='Purge DB (DANGEROUS)'
@@ -18,24 +18,21 @@ checkboxes = {
         value=False,
         description='Create DB (DANGEROUS)'
     ),
-    'wiki_spider': generate_checkbox(
-        value=False,
-        description='Scrape School and Newspaper Names'
-    ),
-    'amcha_uni_spider': generate_checkbox(
-        value=False,
-        description='Scrape and Verify School Name from Amcha'
-    ),
-    'amcha_incident_spider': generate_checkbox(
-        value=False,
-        description='Scrape Amcha Incidents'
+    'scraping_step': widgets.RadioButtons(
+        options=['None',
+                 'Wikipedia College Newspaper Scraping',
+                 'Amcha University Name Scraping',
+                 'Amcha Incident Scraping'],
+        value='None',
+        description='Revise a portion of the database.',
+        disabled=False, indent=False
     ),
     'gcs_runner': generate_checkbox(
-        value=True,
+        value=False,
         description='Run GCS to Get Newspaper Candidate Links'
     ),
 }
 
-def checkbox_value(key):
+def widget_value(key):
     """Get the value of a given checkbox"""
-    return checkboxes[key].value
+    return local_widgets[key].value
