@@ -47,6 +47,13 @@ class DBConn:
             author TEXT,
             title TEXT,
             date_written DATE,
+            lastmod TIMESTAMP,
+            dir_1 VARCHAR(255),
+            dir_2 VARCHAR(255),
+            dir_3 VARCHAR(255),
+            dir_4 VARCHAR(255),
+            dir_5 VARCHAR(255),
+            last_dir VARCHAR(255),
             UNIQUE (link)
         """,
         'incidents':"""
