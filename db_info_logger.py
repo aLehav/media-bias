@@ -25,7 +25,9 @@ def log():
 
     n_inspected_entries = count_entries(conn, 'newspapers', 'link_is_accurate IS NOT NULL')
 
-    n_accurate_entries = count_entries(conn, 'newspapers', 'link_is_accurate IS %s', (True,))
+    n_accurate_entries = count_entries(conn, 'newspapers', 'link_is_accurate IS TRUE')
+
+    n_wordpress_entries = count_entries(conn, 'newspapers', 'link_is_accurate IS TRUE AND is_wordpress IS TRUE')
 
     n_incidents = count_entries(conn, 'incidents')
     conn.close()
@@ -36,4 +38,5 @@ def log():
           f"\n\t   {n_link_entries} newspapers have a link searched." +
           f"\n\t   {n_inspected_entries} newspapers have had this link manually inspected." +
           f"\n\t   {n_accurate_entries} schools have a correct newspaper name and base link." +
+          f"\n\t   {n_wordpress_entries} schools have a wordpress page." +
           f"\nThere are {n_incidents} total incident DB entries.")
