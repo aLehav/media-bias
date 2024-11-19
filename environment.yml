@@ -15,4 +15,5 @@ dependencies:
   - beautifulsoup4
   - ipywidgets
   - pip
-  
+  - pip:
+    - advertools
