@@ -27,9 +27,9 @@ local_widgets = {
         description='Revise a portion of the database.',
         disabled=False, indent=False
     ),
-    'gcs_runner': generate_checkbox(
+    'enrich': generate_checkbox(
         value=False,
-        description='Run GCS to Get Newspaper Candidate Links'
+        description='GCS and Wordpress'
     ),
 }
 
