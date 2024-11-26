@@ -50,7 +50,7 @@ class NewspaperEnricher:
         base_url = NewspaperEnricher._get_base_url(url)
         try:
             sitemap_df = sitemap_to_df(base_url + "robots.txt")
-        except (ValueError, HTTPError, URLError):
+        except (ValueError, HTTPError, URLError, ParseError):
             try:
                 sitemap_df = sitemap_to_df(base_url + "sitemap.xml")
                 if sitemap_df is None:
