@@ -18,19 +18,34 @@ local_widgets = {
         value=False,
         description='Create DB (DANGEROUS)'
     ),
-    'scraping_step': widgets.RadioButtons(
-        options=['None',
-                 'Wikipedia College Newspaper Scraping',
-                 'Amcha University Name Scraping',
-                 'Amcha Incident Scraping'],
-        value='None',
-        description='Revise a portion of the database.',
-        disabled=False, indent=False
+    'scrape_wiki': generate_checkbox(
+        value=True,
+        description='Scrape Wiki'
     ),
-    'enrich': generate_checkbox(
+    'scrape_amcha': generate_checkbox(
+        value=True,
+        description='Scrape AMCHA'
+    ),
+    'manually_pair_amcha_to_wiki': generate_checkbox(
         value=False,
-        description='GCS and Wordpress'
+        description='Manually Pair AMCHA and Wiki Names'
     ),
+    'gcs': generate_checkbox(
+        value=True,
+        description='Search Newspaper Link for Matched Schools'
+    ),
+    'manually_verify_links': generate_checkbox(
+        value=False,
+        description='Manually Verify Link/Name/Newspaper Matches'
+    ),
+    'set_wordpress_status': generate_checkbox(
+        value=True,
+        description='Check if newspaper sites are made with wordpress'
+    ),
+    'insert_article_links': generate_checkbox(
+        value=False,
+        description='Insert Article URLs'
+    )
 }
 
 def widget_value(key):

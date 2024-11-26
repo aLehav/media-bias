@@ -1,19 +1,20 @@
 """Module containing functions that enrich the data in newspapers table"""
 from datetime import date, datetime
 from time import sleep
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from xml.etree.ElementTree import ParseError
-from advertools import sitemap_to_df, url_to_df
+from advertools import url_to_df
 import pandas as pd
+from psycopg2.extras import execute_values
 from tqdm.auto import tqdm
 import requests
 from .postgres import DBConn
 from .gcs import GCS
+from .sitemaps import sitemap_to_df
 from .py_config import BW_API_KEY
-from psycopg2.extras import execute_values
 
-
+GCS_SLEEP_DUR = 0.6
 
 class NewspaperEnricher:
     """Class that enriches newspapers table with automatic and manual data"""
@@ -49,20 +50,22 @@ class NewspaperEnricher:
         base_url = NewspaperEnricher._get_base_url(url)
         try:
             sitemap_df = sitemap_to_df(base_url + "robots.txt")
-        except (ValueError, HTTPError):
+        except (ValueError, HTTPError, URLError):
             try:
                 sitemap_df = sitemap_to_df(base_url + "sitemap.xml")
                 if sitemap_df is None:
                     return None
-            except (ValueError, HTTPError, ParseError) as e:
+            except (ValueError, HTTPError, URLError, ParseError) as e:
                 print("Exception occurred in get_sitemaps: ",e)
                 return None
+        if not 'loc' in sitemap_df.columns:
+            return None
         sitemap_df = sitemap_df.dropna(subset=['loc'])
         url_df = url_to_df(sitemap_df['loc'])
         merged_df = pd.merge(sitemap_df, url_df, left_on='loc', right_on='url', how='inner')
         return merged_df
 
-    def insert_n_links(self, n):
+    def insert_links(self, n=None):
         """Insert up to n links for schools that do not have a link attribute."""
         self.cur.execute("""
             SELECT n.id, n.name, s.name
@@ -71,10 +74,14 @@ class NewspaperEnricher:
             WHERE n.link IS NULL
         """)
         # Slice first n entries
-        first_n_newspapers = self.cur.fetchall()[:n]
-        for row in first_n_newspapers:
+        newspapers = self.cur.fetchall()
+        if n is not None:
+            newspapers = newspapers[:n]
+        for row in tqdm(newspapers):
             # row entries in order are n.id, n.name, s.name
             link = self.gcs.school_and_newspaper_to_link(row[1], row[2])
+            # sleep to not overuse api
+            sleep(GCS_SLEEP_DUR)
             if link:
                 today = date.today()
                 try:
@@ -136,7 +143,7 @@ class NewspaperEnricher:
         self.cur.execute("""
             SELECT id, link
             FROM newspapers
-            WHERE link_is_accurate IS TRUE AND is_wordpress IS NULL
+            WHERE link IS NOT NULL AND is_wordpress IS NULL
         """)
         # Slice first n entries
         newspapers = self.cur.fetchall()
@@ -175,10 +182,13 @@ class NewspaperEnricher:
                 SELECT id, school_id, link
                 FROM newspapers
                 WHERE link_is_accurate IS TRUE
-            """)
+                AND school_id = %s OR school_id = %s OR school_id = %s
+            """, (2937, 2925, 2926))
         newspapers = self.cur.fetchall()
+        if start_index is not None:
+            newspapers = newspapers[start_index:]
         if n is not None:
-            newspapers = newspapers[start_index:start_index+n]
+            newspapers = newspapers[:n]
         for row in tqdm(newspapers):
             now = datetime.now()
             article_df = self._get_article_urls(row[2])

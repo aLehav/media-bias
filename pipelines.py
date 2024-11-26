@@ -29,6 +29,8 @@ class WikiPipeline:
             self.cur.execute("""
                 INSERT INTO schools (name, origin_link, date_scraped)
                 VALUES (%s, %s, %s) 
+                ON CONFLICT (name) DO UPDATE
+                SET name = EXCLUDED.name
                 RETURNING id
             """, (item['school_name'], item['link'], today))
             school_id = self.cur.fetchone()[0]  # Fetch the school ID returned
@@ -36,6 +38,7 @@ class WikiPipeline:
             self.cur.execute("""
                 INSERT INTO newspapers (school_id, name, origin_link, date_scraped)
                 VALUES (%s, %s, %s, %s)  
+                ON CONFLICT (school_id, name) DO NOTHING
             """, (school_id, item['newspaper_name'], item['link'], today))
             # If transaction block succeeds, commit.
             self.dbconn.commit()
@@ -66,6 +69,7 @@ class AmchaUniPipeline:
 
     def open_spider(self, spider) -> None:
         """Connect to DB on spider opening"""
+        self.manual_verification_stop = getattr(spider, 'manual_verification_stop', False)
         self.cur.execute("""
             SELECT name, amcha_name FROM schools
         """)

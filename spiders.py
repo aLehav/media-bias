@@ -5,13 +5,19 @@ import json
 from urllib.parse import urlencode
 import requests
 import scrapy
+from scrapy.utils.log import configure_logging
 
 from .postgres import DBConn
 from .items import WikiItem, AmchaUniItem, IncidentItem
 
+configure_logging()
+
 class WikiSpider(scrapy.Spider):
     """Spider that scrapes the wikipedia list of college student newspapers"""
     name = "wiki_spider"
+    custom_settings = {
+        "ITEM_PIPELINES": {"media_bias.pipelines.WikiPipeline": 100},
+    }
     start_urls = ['https://en.wikipedia.org/' \
                   'wiki/List_of_college_and_university_student_newspapers_in_the_United_States']
 
@@ -41,6 +47,9 @@ def response_to_dict(response) -> dict:
 class AmchaUniSpider(scrapy.Spider):
     """Spider that scrapes the amcha university list"""
     name = "amcha_uni_spider"
+    custom_settings = {
+        'ITEM_PIPELINES':{'media_bias.pipelines.AmchaUniPipeline': 100},
+    }
     url = "https://us-east-1-renderer-read.knack.com/v1/scenes/scene_121/views/view_208/records"
 
     params = {
@@ -70,6 +79,16 @@ class AmchaUniSpider(scrapy.Spider):
         "Referrer-Policy": "strict-origin-when-cross-origin" 
     }
 
+    @classmethod
+    def from_crawler(cls, crawler, *args, **kwargs):
+        spider = super().from_crawler(crawler, *args, **kwargs)
+        spider.manual_verification_stop = kwargs.get('manual_verification_stop', False)
+        return spider
+    
+    def __init__(self, *args,  manual_verification_stop=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.manual_verification_stop = manual_verification_stop
+
     def start_requests(self):
         response_1 = requests.get(self.url, headers=self.headers, params=self.params, timeout=120)
         page_1_data = response_to_dict(response_1)
@@ -93,7 +112,10 @@ class AmchaUniSpider(scrapy.Spider):
 class AmchaIncidentSpider(scrapy.Spider):
     """Spider that scrapes the amcha incident list"""
     name = "amcha_incident_spider"
-
+    custom_settings = {
+        'ITEM_PIPELINES':{'media_bias.pipelines.AmchaIncidentPipeline': 100},
+        'AUTOTHROTTLE_ENABLED': True
+    }
     page_url = "https://us-east-1-renderer-read.knack.com/v1/scenes/scene_164/" \
         "views/view_279/records"
 
@@ -157,7 +179,7 @@ class AmchaIncidentSpider(scrapy.Spider):
     }
 
     def __init__(self, **kwargs):
-        super().__init__(self, **kwargs)
+        super().__init__(**kwargs)
         self.dbconn = DBConn()
         self.conn = self.dbconn.connection
         self.cur = self.dbconn.cur
