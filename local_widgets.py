@@ -20,7 +20,7 @@ local_widgets = {
     ),
     'scrape_wiki': generate_checkbox(
         value=True,
-        description='Scrape Wiki'
+        description='Scrape wiki'
     ),
     'scrape_amcha': generate_checkbox(
         value=True,
@@ -28,15 +28,15 @@ local_widgets = {
     ),
     'manually_pair_amcha_to_wiki': generate_checkbox(
         value=False,
-        description='Manually Pair AMCHA and Wiki Names'
+        description='Manually pair AMCHA and wiki names'
     ),
     'gcs': generate_checkbox(
         value=True,
-        description='Search Newspaper Link for Matched Schools'
+        description='Search newspaper link for matched schools'
     ),
     'manually_verify_links': generate_checkbox(
         value=False,
-        description='Manually Verify Link/Name/Newspaper Matches'
+        description='Manually verify link/name/newspaper matches'
     ),
     'set_wordpress_status': generate_checkbox(
         value=True,
@@ -44,8 +44,12 @@ local_widgets = {
     ),
     'insert_article_links': generate_checkbox(
         value=False,
-        description='Insert Article URLs'
-    )
+        description='Insert article urls'
+    ),
+    'set_filter_status': generate_checkbox(
+        value=False,
+        description='Filter article urls to label likely links'
+    ),
 }
 
 def widget_value(key):

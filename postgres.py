@@ -54,6 +54,9 @@ class DBConn:
             dir_4 VARCHAR(255),
             dir_5 VARCHAR(255),
             last_dir VARCHAR(255),
+            is_filtered BOOLEAN,
+            time_filtered TIMESTAMP,
+            filter_status VARCHAR(255),
             UNIQUE (link)
         """,
         'incidents':"""

@@ -214,7 +214,7 @@ class NewspaperEnricher:
                         WHERE id = %s
                     """, (now, row[0]))
                     self.dbconn.commit()
-                    print(f"{len(enriched_article_tuples)} articles added for {row[2]}")
+                    print(f"{len(enriched_article_tuples)} links added for {row[2]}")
                 except Exception as e:
                     self.dbconn.rollback()
                     print(f"An error occurred: {e}")
