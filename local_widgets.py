@@ -31,7 +31,7 @@ local_widgets = {
         description='Manually pair AMCHA and wiki names'
     ),
     'gcs': generate_checkbox(
-        value=True,
+        value=False,
         description='Search newspaper link for matched schools'
     ),
     'manually_verify_links': generate_checkbox(
@@ -39,11 +39,11 @@ local_widgets = {
         description='Manually verify link/name/newspaper matches'
     ),
     'set_wordpress_status': generate_checkbox(
-        value=True,
+        value=False,
         description='Check if newspaper sites are made with wordpress'
     ),
     'insert_article_links': generate_checkbox(
-        value=False,
+        value=True,
         description='Insert article urls'
     ),
     'set_filter_status': generate_checkbox(

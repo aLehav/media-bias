@@ -3,14 +3,17 @@
 import re
 import json
 from urllib.parse import urlencode
+import pandas as pd
+import logging
 import requests
 import scrapy
 from scrapy.utils.log import configure_logging
-
 from .postgres import DBConn
-from .items import WikiItem, AmchaUniItem, IncidentItem
+from .items import WikiItem, AmchaUniItem, IncidentItem, ArticleItem
+from .article_extractor import ArticleExtractor
 
-configure_logging()
+configure_logging({"LOG_LEVEL":"INFO"})
+logging.getLogger('scrapy').propagate = False
 
 class WikiSpider(scrapy.Spider):
     """Spider that scrapes the wikipedia list of college student newspapers"""
@@ -223,3 +226,68 @@ class AmchaIncidentSpider(scrapy.Spider):
                             raw_fields=response_dict,
                             origin_link=response.meta['origin_link'])
         yield item
+
+class ArticleSpider(scrapy.Spider):
+    """Spider that scrapes articles"""
+    name = "article_spider"
+    custom_settings = {
+        "ITEM_PIPELINES": {"media_bias.pipelines.ArticlePipeline": 100},
+        "AUTOTHROTTLE_ENABLED": True,
+        "DOWNLOAD_DELAY": 0.5,
+        "CONCURRENT_REQUESTS_PER_DOMAIN": 8,
+        "CONCURRENT_REQUESTS_PER_IP": 8,
+        "COOKIES_ENABLED": False,
+        "RETRY_ENABLED": True,
+        "RETRY_TIMES": 3,
+        "USER_AGENT": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+        "DEFAULT_REQUEST_HEADERS": {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en',
+        },
+    }
+
+    def __init__(self, *args,  n=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.n = n
+        self.dbconn = DBConn()
+        self.conn = self.dbconn.connection
+        self.cur = self.dbconn.cur
+        query_select = """SELECT id, link FROM articles 
+        WHERE content IS NULL 
+        AND filter_status = 'article'
+        AND is_filtered IS TRUE"""
+        self.article_df = pd.read_sql(query_select, self.conn)
+        if self.n:
+            self.article_df = self.article_df.sample(n=10, random_state=42)
+
+        
+        for handler in logging.root.handlers:
+            if handler.level == logging.NOTSET:
+                logging.root.removeHandler(handler)
+                print(f"Removed handler: {handler}")
+
+    def start_requests(self):
+        for _, row in self.article_df.iterrows():
+            article_id = row['id']
+            link = row['link']
+            yield scrapy.Request(
+                url=link, 
+                callback=self.parse, 
+                meta={'id': article_id}, 
+                dont_filter=True
+            )
+
+    def parse(self, response):
+        if response.status == 200:
+            article_id = response.meta['id']
+            link = response.url
+            content = response.text
+            item = ArticleItem(
+                id=article_id,
+                link=link,
+                content=content,
+            )
+            ArticleExtractor.set_fields(item, response)
+            yield item
+        else:
+            self.logger.warning(f"Failed to fetch {response.url} with status {response.status}")

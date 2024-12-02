@@ -25,3 +25,14 @@ class IncidentItem(Item):
     origin_link = Field()
     raw_fields = Field()
     
+class ArticleItem(Item):
+    """Class for aritlce items"""
+
+    id = Field()
+    link = Field()
+    content = Field()
+    processed_article = Field()
+    processing_method = Field()
+    author = Field()
+    title = Field()
+    date_written = Field()
