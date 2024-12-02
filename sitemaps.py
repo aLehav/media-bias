@@ -1,4 +1,4 @@
-"""Advertools page with timeout arg and error catching added"""
+"""Advertools page with timeout arg and error catching added. Filtering added"""
 
 import logging
 from concurrent import futures
@@ -6,7 +6,8 @@ from gzip import GzipFile
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 from urllib.error import URLError
-
+from urllib.parse import urlparse, parse_qs
+from datetime import datetime
 import pandas as pd
 
 from advertools import __version__ as version
@@ -67,9 +68,23 @@ def _build_request_headers(user_headers=None):
         final_headers.update(user_headers)
     return final_headers
 
+def _filter_sitemap(sitemap_url, last_scraped):
+    if last_scraped:
+        parsed_url = urlparse(sitemap_url)
+        query_params = parse_qs(parsed_url.query)
 
+        if "date" in query_params:
+            try:
+                date_param = datetime.strptime(query_params["date"][0], "%Y-%m-%d")
+                if date_param < last_scraped:
+                    logging.info(f"Ignoring sitemap {sitemap_url} due to date filter.")
+                    return False
+            except ValueError:
+                pass  # Ignore parsing errors and proceed
 
-def sitemap_to_df(sitemap_url, max_workers=8, recursive=True, request_headers=None):
+    return True
+
+def sitemap_to_df(sitemap_url, max_workers=8, recursive=True, request_headers=None, last_scraped=None):
     """
     Retrieve all URLs and other available tags of a sitemap(s) and put them in
     a DataFrame.
@@ -105,11 +120,14 @@ def sitemap_to_df(sitemap_url, max_workers=8, recursive=True, request_headers=No
         if sitemap_url.endswith("robots.txt"):
             return pd.concat(
                 [
-                    sitemap_to_df(sitemap, recursive=recursive)
+                    sitemap_to_df(sitemap, recursive=recursive, last_scraped=last_scraped)
                     for sitemap in _sitemaps_from_robotstxt(sitemap_url, final_headers)
                 ],
                 ignore_index=True,
             )
+        
+        if not _filter_sitemap(sitemap_url, last_scraped):
+            return pd.DataFrame()
 
         if sitemap_url.endswith("xml.gz"):
             final_headers["accept-encoding"] = "gzip"
@@ -161,7 +179,7 @@ def sitemap_to_df(sitemap_url, max_workers=8, recursive=True, request_headers=No
         with futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             to_do = []
             for sitemap in sitemap_url_list:
-                future = executor.submit(sitemap_to_df, sitemap)
+                future = executor.submit(sitemap_to_df, sitemap, last_scraped=last_scraped)
                 to_do.append(future)
             done_iter = futures.as_completed(to_do)
             for future in done_iter:
@@ -189,6 +207,8 @@ def sitemap_to_df(sitemap_url, max_workers=8, recursive=True, request_headers=No
     if "lastmod" in sitemap_df:
         try:
             sitemap_df["lastmod"] = pd.to_datetime(sitemap_df["lastmod"], utc=True)
+            if last_scraped:
+                sitemap_df = sitemap_df[sitemap_df["lastmod"] >= last_scraped]
         except Exception:
             pass
     if "priority" in sitemap_df:

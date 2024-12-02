@@ -40,7 +40,7 @@ class DBConn:
             origin_link VARCHAR(255),
             date_scraped DATE,
             link VARCHAR(255),
-            raw_text TEXT,
+            content TEXT,
             processed_article TEXT,
             time_processed TIMESTAMP,
             processing_method INTEGER,

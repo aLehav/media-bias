@@ -43,16 +43,16 @@ class NewspaperEnricher:
         return base_url
 
     @staticmethod
-    def _get_article_urls(url):
+    def _get_article_urls(url, time_last_scraped):
         """
-        For a given newspaper url, find all possible article urls
+        For a given newspaper url and time last scraped, find all possible article urls
         """
         base_url = NewspaperEnricher._get_base_url(url)
         try:
-            sitemap_df = sitemap_to_df(base_url + "robots.txt")
+            sitemap_df = sitemap_to_df(base_url + "robots.txt", last_scraped=time_last_scraped)
         except (ValueError, HTTPError, URLError, ParseError):
             try:
-                sitemap_df = sitemap_to_df(base_url + "sitemap.xml")
+                sitemap_df = sitemap_to_df(base_url + "sitemap.xml", last_scraped=time_last_scraped)
                 if sitemap_df is None:
                     return None
             except (ValueError, HTTPError, URLError, ParseError) as e:
@@ -173,13 +173,13 @@ class NewspaperEnricher:
         """
         if wordpress_only:
             self.cur.execute("""
-                SELECT id, school_id, link
+                SELECT id, school_id, link, time_last_scraped
                 FROM newspapers
                 WHERE link_is_accurate IS TRUE AND is_wordpress IS TRUE
             """)
         else:
             self.cur.execute("""
-                SELECT id, school_id, link
+                SELECT id, school_id, link, time_last_scraped
                 FROM newspapers
                 WHERE link_is_accurate IS TRUE
                 AND school_id = %s OR school_id = %s OR school_id = %s
@@ -191,7 +191,8 @@ class NewspaperEnricher:
             newspapers = newspapers[:n]
         for row in tqdm(newspapers):
             now = datetime.now()
-            article_df = self._get_article_urls(row[2])
+            print(f"{row[2]} last scraped {row[3]} being scraped.")
+            article_df = self._get_article_urls(row[2], row[3])
             if article_df is not None:
                 try:
                     for col in ['lastmod','dir_2','dir_3','dir_4','dir_5']:
