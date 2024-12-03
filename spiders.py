@@ -256,11 +256,11 @@ class ArticleSpider(scrapy.Spider):
         WHERE content IS NULL 
         AND filter_status = 'article'
         AND is_filtered IS TRUE"""
-        self.article_df = pd.read_sql(query_select, self.conn)
         if self.n:
-            self.article_df = self.article_df.sample(n=10, random_state=42)
+            query_select += f"\nLIMIT {n}"
+        self.article_df = pd.read_sql(query_select, self.conn)
+        self.article_df = self.article_df.sample(frac=1, random_state=42)
 
-        
         for handler in logging.root.handlers:
             if handler.level == logging.NOTSET:
                 logging.root.removeHandler(handler)
