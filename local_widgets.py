@@ -19,11 +19,11 @@ local_widgets = {
         description='Create DB (DANGEROUS)'
     ),
     'scrape_wiki': generate_checkbox(
-        value=True,
+        value=False,
         description='Scrape wiki'
     ),
     'scrape_amcha': generate_checkbox(
-        value=True,
+        value=False,
         description='Scrape AMCHA'
     ),
     'manually_pair_amcha_to_wiki': generate_checkbox(
@@ -43,13 +43,17 @@ local_widgets = {
         description='Check if newspaper sites are made with wordpress'
     ),
     'insert_article_links': generate_checkbox(
-        value=True,
+        value=False,
         description='Insert article urls'
     ),
     'set_filter_status': generate_checkbox(
         value=False,
         description='Filter article urls to label likely links'
     ),
+    'scrape_articles': generate_checkbox(
+        value=True,
+        description='Scrape Articles'
+    )
 }
 
 def widget_value(key):
