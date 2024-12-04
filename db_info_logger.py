@@ -25,8 +25,8 @@ def log():
     n_incidents = count_entries('incidents')
     n_physical_assault_incidents = count_entries('incidents', "physical_assault IS TRUE")
     n_links = count_entries('articles')
-    n_nonarticle_links = count_entries('articles', "filter_status != 'article' AND is_filtered IS TRUE")
-    n_article_links = count_entries('articles', "filter_status = 'article' AND is_filtered IS TRUE")
+    n_nonarticle_links = count_entries('articles', "filter_status != %s AND is_filtered IS TRUE", ('article',))
+    n_article_links = count_entries('articles', "filter_status = %s AND is_filtered IS TRUE", ('article',))
     n_content_articles = count_entries('articles', "content IS NOT NULL")
     n_israel_articles = count_entries('articles', "title ILIKE %s", ("%Israel%",))
     
