@@ -36,3 +36,8 @@ class ArticleItem(Item):
     author = Field()
     title = Field()
     date_written = Field()
+
+class ArticleInsertItem(Item):
+    """Class for sitemaps to be inserted to the db"""
+    
+    df = Field()
