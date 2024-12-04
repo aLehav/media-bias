@@ -22,4 +22,4 @@ dependencies = [
 ]
 
 [tool.flit.sdist]
-exclude = ["*.toml", "*.json", "*.yaml", "py_config.py"]
+exclude = ["py_config.py"]
