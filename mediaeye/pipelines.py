@@ -5,8 +5,8 @@ from collections import defaultdict
 from psycopg2 import errors
 from psycopg2.errorcodes import UNIQUE_VIOLATION
 
-from .postgres import DBConn
-from .items import WikiItem, AmchaUniItem, IncidentItem, ArticleItem
+from mediaeye.postgres import DBConn
+from mediaeye.items import WikiItem, AmchaUniItem, IncidentItem, ArticleItem
 
 class WikiPipeline:
     """

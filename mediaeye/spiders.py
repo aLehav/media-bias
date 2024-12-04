@@ -8,9 +8,9 @@ import logging
 import requests
 import scrapy
 from scrapy.utils.log import configure_logging
-from .postgres import DBConn
-from .items import WikiItem, AmchaUniItem, IncidentItem, ArticleItem
-from .article_extractor import ArticleExtractor
+from mediaeye.postgres import DBConn
+from mediaeye.items import WikiItem, AmchaUniItem, IncidentItem, ArticleItem
+from mediaeye.article_extractor import ArticleExtractor
 
 configure_logging({"LOG_LEVEL":"INFO"})
 logging.getLogger('scrapy').propagate = False
@@ -19,7 +19,7 @@ class WikiSpider(scrapy.Spider):
     """Spider that scrapes the wikipedia list of college student newspapers"""
     name = "wiki_spider"
     custom_settings = {
-        "ITEM_PIPELINES": {"media_bias.pipelines.WikiPipeline": 100},
+        "ITEM_PIPELINES": {"mediaeye.pipelines.WikiPipeline": 100},
     }
     start_urls = ['https://en.wikipedia.org/' \
                   'wiki/List_of_college_and_university_student_newspapers_in_the_United_States']
@@ -51,7 +51,7 @@ class AmchaUniSpider(scrapy.Spider):
     """Spider that scrapes the amcha university list"""
     name = "amcha_uni_spider"
     custom_settings = {
-        'ITEM_PIPELINES':{'media_bias.pipelines.AmchaUniPipeline': 100},
+        'ITEM_PIPELINES':{'mediaeye.pipelines.AmchaUniPipeline': 100},
     }
     url = "https://us-east-1-renderer-read.knack.com/v1/scenes/scene_121/views/view_208/records"
 
@@ -116,7 +116,7 @@ class AmchaIncidentSpider(scrapy.Spider):
     """Spider that scrapes the amcha incident list"""
     name = "amcha_incident_spider"
     custom_settings = {
-        'ITEM_PIPELINES':{'media_bias.pipelines.AmchaIncidentPipeline': 100},
+        'ITEM_PIPELINES':{'mediaeye.pipelines.AmchaIncidentPipeline': 100},
         'AUTOTHROTTLE_ENABLED': True
     }
     page_url = "https://us-east-1-renderer-read.knack.com/v1/scenes/scene_164/" \
@@ -231,7 +231,7 @@ class ArticleSpider(scrapy.Spider):
     """Spider that scrapes articles"""
     name = "article_spider"
     custom_settings = {
-        "ITEM_PIPELINES": {"media_bias.pipelines.ArticlePipeline": 100},
+        "ITEM_PIPELINES": {"mediaeye.pipelines.ArticlePipeline": 100},
         "AUTOTHROTTLE_ENABLED": True,
         "DOWNLOAD_DELAY": 0.5,
         "CONCURRENT_REQUESTS_PER_DOMAIN": 8,

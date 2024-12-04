@@ -2,7 +2,7 @@
 from datetime import datetime
 import pandas as pd
 from psycopg2.extras import execute_values
-from .postgres import DBConn
+from mediaeye.postgres import DBConn
 
 class ArticleEnricher:
     """Class that enriches articles table with automatic and manual data"""

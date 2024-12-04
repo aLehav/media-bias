@@ -9,10 +9,10 @@ import pandas as pd
 from psycopg2.extras import execute_values
 from tqdm.auto import tqdm
 import requests
-from .postgres import DBConn
-from .gcs import GCS
-from .sitemaps import sitemap_to_df
-from .py_config import BW_API_KEY
+from mediaeye.postgres import DBConn
+from mediaeye.gcs import GCS
+from mediaeye.sitemaps import sitemap_to_df
+from mediaeye.py_config import BW_API_KEY
 
 GCS_SLEEP_DUR = 0.6
 

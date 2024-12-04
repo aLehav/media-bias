@@ -1,5 +1,5 @@
 """Moduler for logging information about the DB"""
-from .postgres import DBConn
+from mediaeye.postgres import DBConn
 
 def log():
     """Log general information about the DB."""
