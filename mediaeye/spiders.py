@@ -1,15 +1,19 @@
 """Module containing scrapy spiders"""
 
+from datetime import datetime
+import logging
 import re
 import json
-from urllib.parse import urlencode
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode, urlparse, parse_qs
+from xml.etree import ElementTree
 import pandas as pd
-import logging
 import requests
 import scrapy
 from scrapy.utils.log import configure_logging
 from mediaeye.postgres import DBConn
-from mediaeye.items import WikiItem, AmchaUniItem, IncidentItem, ArticleItem
+from mediaeye.sitemaps import sitemap_to_df
+from mediaeye.items import WikiItem, AmchaUniItem, IncidentItem, ArticleItem, ArticleInsertItem
 from mediaeye.article_extractor import ArticleExtractor
 
 configure_logging({"LOG_LEVEL":"INFO"})
@@ -291,3 +295,139 @@ class ArticleSpider(scrapy.Spider):
             yield item
         else:
             self.logger.warning(f"Failed to fetch {response.url} with status {response.status}")
+
+class ArticleInsertSpider(scrapy.Spider):
+    """Spider that scrapes articles from sitemaps and inserts them"""
+    name = "article_insert_spider"
+    custom_settings = {
+        "ITEM_PIPELINES": {"mediaeye.pipelines.ArticleInsertPipeline": 100},
+        "AUTOTHROTTLE_ENABLED": True,
+        "DOWNLOAD_DELAY": 0.5,
+        "CONCURRENT_REQUESTS_PER_DOMAIN": 8,
+        "CONCURRENT_REQUESTS_PER_IP": 16,
+        "COOKIES_ENABLED": False,
+        "RETRY_ENABLED": False,
+        "DOWNLOAD_TIMEOUT": 15,
+        "USER_AGENT": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+        "DEFAULT_REQUEST_HEADERS": {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en',
+        },
+    }
+
+    def __init__(self, *args, n=None, wordpress_only=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.n = n
+        self.wordpress_only = wordpress_only
+        self.dbconn = DBConn()
+        self.conn = self.dbconn.connection
+        self.cur = self.dbconn.cur
+        query_select = """SELECT id, school_id, link, time_last_scraped 
+                          FROM newspapers 
+                          WHERE link_is_accurate IS TRUE"""
+        if self.wordpress_only:
+            query_select += " AND is_wordpress IS TRUE"
+        if self.n:
+            query_select += f"\nLIMIT {self.n}"
+        self.newspaper_df = pd.read_sql(query_select, self.conn)
+
+        for handler in logging.root.handlers:
+            if handler.level == logging.NOTSET:
+                logging.root.removeHandler(handler)
+                print(f"Removed handler: {handler}")
+
+    def start_requests(self):
+        for _, row in self.newspaper_df.iterrows():
+            base_url = self._get_base_url(row['link'])
+            robots_url = f"{base_url}robots.txt"
+            sitemap_url = f"{base_url}sitemap.xml"
+            yield scrapy.Request(
+                url=robots_url,
+                callback=self.parse_robots,
+                meta={"base_url": base_url, "newspaper_id": row["id"], "school_id": row["school_id"], "last_scraped": row["time_last_scraped"]},
+                dont_filter=True
+            )
+            yield scrapy.Request(
+                url=sitemap_url,
+                callback=self.parse_sitemap,
+                meta={"base_url": base_url, "newspaper_id": row["id"], "school_id": row["school_id"], "last_scraped": row["time_last_scraped"]},
+                dont_filter=True
+            )
+
+    def parse_robots(self, response):
+        """Parse robots.txt to find sitemaps."""
+        try:
+            sitemaps = self.extract_sitemaps_from_robots(response.text)
+            for sitemap in sitemaps:
+                if self._filter_sitemap(sitemap, response.meta["last_scraped"]):
+                    yield scrapy.Request(
+                        url=sitemap,
+                        callback=self.parse_sitemap,
+                        meta=response.meta
+                )
+        except (ValueError, HTTPError, URLError) as e:
+            self.logger.warning(f"Error parsing robots.txt at {response.url}: {e}")
+
+    def parse_sitemap(self, response):
+        """Parse sitemap to extract URLs."""
+        try:
+            root = ElementTree.fromstring(response.body)
+            if root.tag.endswith("sitemapindex"):
+                sitemaps = [sitemap.text for sitemap in root.findall(".//{*}sitemap/{*}loc")]
+                filtered_sitemaps = filter(lambda x: self._filter_sitemap(x, response.meta["last_scraped"]), sitemaps)
+                for sitemap in filtered_sitemaps:
+                    yield scrapy.Request(sitemap, callback=self.parse_sitemap, meta=response.meta)
+            elif root.tag.endswith("urlset"):
+                urls = self.extract_urls_from_sitemap(root, response.meta["last_scraped"], response.url)
+                if urls:
+                    item = ArticleInsertItem(
+                        newspaper_id=response.meta["newspaper_id"],
+                        school_id=response.meta["school_id"],
+                        df=pd.DataFrame(urls)
+                    )
+                    yield item
+        except ElementTree.ParseError:
+            self.logger.warning(f"Failed to parse sitemap: {response.url}")
+        except (ValueError, HTTPError, URLError) as e:
+            self.logger.warning(f"Error processing sitemap {response.url}: {e}")
+
+    def extract_sitemaps_from_robots(self, robots_txt):
+        """Extract sitemap URLs from robots.txt."""
+        sitemaps = []
+        for line in robots_txt.splitlines():
+            if line.lower().startswith("sitemap:"):
+                sitemaps.append(line.split(":", 1)[1].strip())
+        return sitemaps
+    
+    def _filter_sitemap(self, sitemap_url, last_scraped):
+        """Filter sitemaps based on the `last_scraped` date."""
+        if last_scraped:
+            parsed_url = urlparse(sitemap_url)
+            query_params = parse_qs(parsed_url.query)
+
+            if "date" in query_params:
+                try:
+                    date_param = datetime.strptime(query_params["date"][0], "%Y-%m-%d")
+                    if date_param < last_scraped:
+                        self.logger.info(f"Ignoring sitemap {sitemap_url} due to date filter.")
+                        return False
+                except ValueError:
+                    pass  # Ignore parsing errors and proceed
+        return True
+
+    def extract_urls_from_sitemap(self, root, last_scraped, sitemap_url):
+        """Vectorized extraction of URLs."""
+        urls = []
+        for url_node in root.findall(".//{*}url"):
+            loc = url_node.find(".//{*}loc")
+            lastmod = url_node.find(".//{*}lastmod")
+            if loc is not None:
+                lastmod_date = pd.to_datetime(lastmod.text, errors="coerce", utc=True) if lastmod else None
+                if not last_scraped or (lastmod_date and lastmod_date >= pd.to_datetime(last_scraped, utc=True)):
+                    urls.append({"loc": loc.text, "lastmod": lastmod_date, "sitemap": sitemap_url})
+        return urls
+
+    def _get_base_url(self, url):
+        """Extract the base URL from a full URL."""
+        parsed_url = urlparse(url)
+        return f"{parsed_url.scheme}://{parsed_url.netloc}/"

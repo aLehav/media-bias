@@ -39,5 +39,7 @@ class ArticleItem(Item):
 
 class ArticleInsertItem(Item):
     """Class for sitemaps to be inserted to the db"""
-    
+
+    newspaper_id = Field()
+    school_id = Field()
     df = Field()

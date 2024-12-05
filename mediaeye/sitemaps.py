@@ -3,8 +3,8 @@
 import logging
 from concurrent import futures
 from gzip import GzipFile
-from urllib.request import Request, urlopen
 from xml.etree import ElementTree
+from urllib.request import Request, urlopen
 from urllib.error import URLError
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
